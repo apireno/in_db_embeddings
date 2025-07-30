@@ -55,23 +55,33 @@ fi
 
 
 
+  echo  
 echo "Loading DDL from '$DDL_FILE'..."
 "${SURQL_IMPORT_CMD[@]}" $DDL_FILE
 
+  echo  
 echo "Loading functions from '$FUNCTIONS_FILE'..."
 "${SURQL_IMPORT_CMD[@]}" $FUNCTIONS_FILE
 
+
+  echo  
 echo "Truncating embedding data table"
 "${SURQL_SQL_CMD[@]}" -d "DELETE FROM embedding_model;"
 
+
+  echo  
 echo "Converting embedding data to SurrealQL format..."
 awk '{ id = $1; word = $1; gsub(/\\/, "\\\\", id); gsub(/\x60/, "\\\x60", id); gsub(/\\/, "\\\\", word); gsub(/\x27/, "\\\x27", word); printf "CREATE embedding_model:`%s` CONTENT {word: \x27%s\x27, embedding: [", id, word; for(i=2; i<=NF; i++) {printf "%s%s", $i, (i<NF?", ":"")}; print "] };"}' $EMBEDDING_SRC_FILE > $EMBEDDING_SURQL_FILE
 
+
+  echo  
 echo "inserting model to database '$EMBEDDING_SURQL_FILE'..."
 "${SURQL_IMPORT_CMD[@]}" $EMBEDDING_SURQL_FILE
 
 
 
+
+  echo  
 # --- 3. Verification and Cleanup ---
 # Get the final row count directly from the database
 ROW_COUNT=$("${SURQL_SQL_CMD[@]}" -d "SELECT count() FROM embedding_model GROUP ALL;" | jq -r '.[0].result')

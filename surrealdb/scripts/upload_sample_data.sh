@@ -48,16 +48,24 @@ CONTENT_SURQL_FILE="data/sample_content.surql"
 
 
 
+
+  echo  
 echo "Converting sample content data to SurrealQL format..."
-awk '{ line = $0; gsub(/\\/, "\\\\", line); gsub(/"/, "\\\"", line); printf "CREATE sample_content CONTENT {\"content\": \"%s\"};\n", line }' $CONTENT_SRC_FILE > $CONTENT_SURQL_FILE
+#awk '{ line = $0; gsub(/\\/, "\\\\", line); gsub(/"/, "\\\"", line); printf "CREATE sample_content CONTENT {\"content\": \"%s\"};\n", line }' $CONTENT_SRC_FILE > $CONTENT_SURQL_FILE
+awk '{ line = $0; gsub(/\\/, "\\\\", line); gsub(/"/, "\\\"", line); printf "CREATE sample_content:%s CONTENT {\"content\": \"%s\"};\n", NR, line }' $CONTENT_SRC_FILE > $CONTENT_SURQL_FILE
 
 
+  echo  
 echo "Truncating content table"
 "${SURQL_SQL_CMD[@]}" -d "DELETE FROM sample_content;"
 
+
+  echo  
 echo "inserting content to database '$CONTENT_SURQL_FILE'..."
 "${SURQL_IMPORT_CMD[@]}" $CONTENT_SURQL_FILE
 
+
+  echo  
 # --- 3. Verification and Cleanup ---
 # Get the final row count directly from the database
 ROW_COUNT=$("${SURQL_SQL_CMD[@]}" -d "SELECT count() FROM sample_content GROUP ALL;" | jq -r '.[0].result')

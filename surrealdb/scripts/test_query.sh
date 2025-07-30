@@ -44,17 +44,17 @@ echo "--- Executing vector search for: \"$USER_INPUT_SENTENCE\" ---"
 
 
 echo
-
+echo
 # This command pipeline executes the query and formats the JSON result into a table.
 (
   # 1. Print a tab-separated header for the table.
-  echo -e "content\tdistance"
-
+  echo -e "id\tcontent\tdistance"
+  echo  
   # 2. Execute the query. The JSON output is piped to jq.
-  "${SURQL_SQL_CMD[@]}" -d @- <<EOF | jq -r '.[1].result[] | [.content, .euclidian_distance] | @tsv'
+  "${SURQL_SQL_CMD[@]}" -d @- <<EOF | jq -r '.[1].result[] | [.id, .content, .euclidian_distance] | @tsv'
     LET \$v = fn::content_to_vector('$ESCAPED_USER_INPUT');
     SELECT
-        id,
+        record::id(id) AS id,
         content,
         vector::distance::euclidean(embedding,\$v) AS euclidian_distance
     FROM
@@ -68,6 +68,7 @@ EOF
 
 # 3. The entire output (header and data) is piped to the column command for formatting.
 ) | column -t -s $'\t'
+
 
 echo
 echo "Script finished."

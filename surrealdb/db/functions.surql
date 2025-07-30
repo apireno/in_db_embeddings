@@ -46,7 +46,7 @@ DEFINE FUNCTION OVERWRITE fn::retrieve_vectors_for_text_with_oov($text:string)
 
     LET $umatched_word_vectors = $unmatched_words.map(
         |$word|
-        fn::mean_vector((SELECT VALUE embedding:[$word.model,$this].embedding FROM search::analyze("large_name_analyzer", $word.word))[WHERE $this IS NOT NONE])         
+        fn::mean_vector((SELECT VALUE type::thing("embedding_model",$this).embedding FROM search::analyze("large_name_analyzer", $word.word))[WHERE $this IS NOT NONE])         
     
     )[WHERE $this IS NOT NONE];
 
@@ -64,23 +64,6 @@ DEFINE FUNCTION OVERWRITE fn::content_to_vector($text: string) {
     END;
     LET $vectors = fn::retrieve_vectors_for_text_with_oov($text);
     RETURN fn::mean_vector($vectors);
-};
-
-   
-DEFINE  FUNCTION OVERWRITE fn::remove_punctuation($input: string,$replace_with:"" | " ") -> string {
-
-    LET $punctuation = [
-        '.', ',', '&', '(', ')', '"', "'", "+", "!", '-', "{", "}", "[", "]", ":", ";", "<", ">", "`", "/", "\\", "—", "–"
-    ];
-    IF $replace_with = " " THEN{
-        RETURN $punctuation.fold($input,|$a, $b| 
-            $a.replace($b, " ")
-        );
-    }ELSE{
-        RETURN $punctuation.fold($input,|$a, $b| 
-            $a.replace($b, "")
-        );
-    }END;
 };
 
 

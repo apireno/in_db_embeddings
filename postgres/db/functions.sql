@@ -59,7 +59,6 @@ BEGIN
     END LOOP;
 
     -- RAISE NOTICE 'Returning sum_vector: %', sum_vector;
-    RETURN sum_vector;
     -- 4. Calculate the mean vector
     -- Divide the sum_vector by the total number of normalized input vectors
     mean_vec := array(select unnest(sum_vector::real[]) / num_input_vectors)::vector;

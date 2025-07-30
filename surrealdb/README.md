@@ -1,8 +1,10 @@
-# README.md
+Here is a README for your SurrealDB project, structured like your PostgreSQL example and generated from the details in your scripts.
 
-# Postgres Embeddings: On-the-Fly Sentence Embeddings in Your Database
+-----
 
-This repository demonstrates how to store word embedding models directly within a PostgreSQL database and generate sentence embeddings on the fly. This approach allows you to perform powerful semantic searches and other NLP tasks without needing to move your data or manage a separate vector search service.
+# SurrealDB Embeddings: On-the-Fly Sentence Embeddings in Your Database
+
+This repository demonstrates how to store word embedding models directly within a SurrealDB database and generate sentence embeddings on the fly. This approach allows you to perform powerful semantic searches and other NLP tasks without needing to move your data or manage a separate vector search service.
 
 -----
 
@@ -11,29 +13,38 @@ This repository demonstrates how to store word embedding models directly within 
 The primary goal of this project is to show how you can:
 
   * Store word embedding models in database tables.
-  * Calculate sentence embeddings for text blobs in real time.
-  * Leverage the power of `pgvector` for efficient similarity searches at scale.
+  * Calculate sentence embeddings for text blobs automatically upon ingest.
+  * Leverage SurrealDB's native vector functions and indexes for efficient similarity searches at scale.
+
+-----
+
+## Prerequisites
+
+Before you begin, you need to have the SurrealDB command-line tool installed.
+
+  * **SurrealDB**: If you don't have it installed, you can find the official installation guide [here](https://surrealdb.com/docs/installation). The scripts will start a local database instance for you.
 
 -----
 
 ## ✨ Features
 
-  * **pgvector Integration**: Installs and configures the `pgvector` extension for PostgreSQL.
-  * **Database Setup**: Creates a dedicated database (`vector_demo_db`) for the demonstration.
-  * **Custom SQL Functions**:
-      * `demo_mean_vector`: Calculates the mean vector of a set of word vectors.
-      * `demo_generate_edgengrams`: Handles out-of-vocabulary (OOV) words using n-grams.
-      * `demo_get_sentence_vectors`: Retrieves vectors for a given blob of text.
-      * `demo_content_to_vector`: Returns a representative mean vector for a blob of text.
-  * **Sample Data**: Random movie review content and the embeddings are expected to be GloVe pre-trained 6B 50 token model (glove.6B.50d.txt).
+  * **Native Vector Search**: Utilizes SurrealDB's built-in vector data types and functions for all operations.
+  * **Automatic Embeddings**: The `sample_content` table is defined to automatically generate and store a vector embedding for any text inserted into the `content` field.
+  * **Custom SurrealQL Functions**:
+      * `fn::mean_vector`: Calculates the mean vector from a set of word vectors to represent a sentence. 
+      * `fn::retrieve_vectors_for_text_with_oov`: Handles out-of-vocabulary (OOV) words by using an `edgengram` analyzer to find embeddings for parts of unknown words.
+      * `fn::content_to_vector`: The main function that takes a string of text and returns a representative vector embedding.
+  * **Sample Data**:
+      * **Embeddings**: The scripts use the pre-trained **GloVe 6B 50d** model.
+      * **Content**: The sample content is from the NLTK Movie Review Corpus, available on [Kaggle](https://www.kaggle.com/datasets/nltkdata/movie-review?select=movie_review.csv).
 
 -----
 
 ## ⚙️ How It Works
 
-The core idea is to treat your word embedding model as data. Each word and its corresponding vector are stored in a table. When you want to find the embedding for a sentence, a SQL function processes the text, looks up the vectors for each word, and calculates a representative vector for the entire sentence (in this case, by averaging the word vectors).
+The core idea is to treat your word embedding model as data. Each word and its corresponding vector are stored in an `embedding_model` table. When you insert text into the `sample_content` table, a `DEFAULT` field definition automatically triggers the `fn::content_to_vector` function to generate a sentence embedding.
 
-By using a **HNSW (Hierarchical Navigable Small World) index**, the similarity search can be performed with high speed and accuracy, even on large datasets.
+For efficient searching, a HNSW (Hierarchical Navigable Small World) index is created on the `embedding` field, allowing for high-speed similarity searches even on large datasets. 
 
 -----
 
@@ -41,80 +52,57 @@ By using a **HNSW (Hierarchical Navigable Small World) index**, the similarity s
 
 To get started, run the following scripts in order:
 
-0.  **`common/scripts/download_embedding_model`**: This script will download the embedding model if you haven't done so yet.
-
----- 
-
-1.  **`postgres/scripts/setup_pgvector`**: This script will install the `pgvector` extension to your PostgreSQL database.
-
-2.  **`postgres/scripts/setup_db_and_upload`**: This script will:
-
-      * Create the `vector_demo_db` database.
-      * Create the necessary tables.
-      * Define the custom SQL functions.
-      * Upload the sample word embedding model to a table.
-
-3.  **`postgres/scripts/upload_sample_data`**: This script will upload the sample content (a list of firms from the SEC) into the `sample_content` table.
-
-4.  **`postgres/scripts/test_query`**: This script will run a sample query to demonstrate a similarity search.
+1.  **`start_surrealdb.sh`**: Starts a local SurrealDB instance using RocksDB for storage.
+2.  **`setup_db_and_upload_embedding_model.sh`**:
+      * Defines the database schema for the tables.
+      * Defines the custom SurrealQL functions.
+      * Uploads the GloVe embedding model into the `embedding_model` table.
+3.  **`upload_sample_data.sh`**: Ingests the sample movie review content into the `sample_content` table. Embeddings are generated automatically during this step.
+4.  **`test_query.sh`**: Prompts for a search term and runs a sample similarity search query.
 
 -----
 
 ## 🔍 Example Query
 
-The following query demonstrates how to find the 10 most similar content entries to a user-provided input string. The `<->` operator is the Euclidean distance operator from `pgvector`.
+The `test_query.sh` script executes the following query, which finds the 10 most similar content entries to a user-provided input string. The `<|...|>` syntax is SurrealDB's vector distance operator.
 
-```sql
+```surql
+LET $v = fn::content_to_vector('$ESCAPED_USER_INPUT');
 SELECT
     id,
     content,
-    embedding <-> "demo_content_to_vector"('$ESCAPED_USER_INPUT')::vector AS distance
+    vector::distance::euclidean(embedding, $v) AS euclidian_distance
 FROM
     sample_content
+WHERE
+    embedding <|10,100|> $v
 ORDER BY
-    distance
+    euclidian_distance
 LIMIT 10;
 ```
 
-For example if using the movie sample and the term "dogs and cats" you should get the following results:
+For example, using the search term "dogs and cats" should yield results similar to this:
 
 ```
-  id   |                content                |      distance      
--------+---------------------------------------+--------------------
- 38814 | "he also chases cats                  |  1.126358589416041
- 57057 | "why aren't they "" dog animals "" ?" | 1.2264580651791586
- 56839 | "the animals themselves               | 1.2694676309930952
- 40272 | "they're these octopus men            | 1.3394634719230951
- 34447 | "i love animals                       | 1.4022585702172772
- 33552 | "that's some ape . """                | 1.4305203206106698
- 35264 | "they even have animals               | 1.4411370250826556
- 19463 | "ghost dog lives                      | 1.4886350836870779
- 42335 | humans .                              | 1.5341574644813925
- 49885 | "they are not creatures               |  1.539828656808244
-(10 rows)
-
+id                                  content                                                                       euclidian_distance
+sample_content:39427                and puppy dogs' tails .                                                         0.37405124491216846
+sample_content:38782                he also chases cats                                                             0.4050348521766213
+sample_content:58019                do cats bathe themselves regularly ?                                          0.4231678262333848
+sample_content:57026                the psychlos refer to humans as  man animals  but yet dogs are still  dogs  . 0.42556090296606564
+sample_content:56809                the animals themselves                                                          0.42604277392230294
+sample_content:57665                it's dog eat dog .                                                              0.42610469396991857
+sample_content:57027                why aren't they  dog animals  ?                                               0.4323068888025586
+sample_content:51717                alien spiders attack them .                                                     0.44764283777619635
+sample_content:4886                 the mole rat specialist is delighted to catalog the ways in which these vermin animals behave like insects  0.4559699067540398
+sample_content:47043                them singing mice                                                               0.45750013572920156
 ```
-
-
------
-
-## 🔧 Customization
-
-You can easily adapt this repository to use your own word embedding models and text data. For example, you could:
-
-  * Upload a **GloVe model** instead of the provided fastText model.
-  * Use **IMDb movie reviews** as your text content.
-
-To do this, you would need to modify the `setup_db_and_upload` and `upload_sample_data` scripts to handle your specific data formats.
 
 -----
 
 ## 🙏 References and Thank Yous
 
-  * **pgvector**: [https://github.com/pgvector/pgvector](https://github.com/pgvector/pgvector)
-  * **fastText**: [https://fasttext.cc/](https://fasttext.cc/)
+  * **SurrealDB**: [https://surrealdb.com/](https://surrealdb.com/)
   * **GloVe**: [https://nlp.stanford.edu/projects/glove/](https://nlp.stanford.edu/projects/glove/)
+  * **NLTK Movie Review Corpus**: [https://www.kaggle.com/datasets/nltkdata/movie-review](https://www.kaggle.com/datasets/nltkdata/movie-review)
 
-  
-
-A big thank you to the creators and maintainers of these powerful open-source tools\!
+A big thank you to the creators and maintainers of these powerful open-source tools and datasets\!
